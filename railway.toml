@@ -1,6 +1,4 @@
 ﻿[build]
 builder = "DOCKERFILE"
 dockerfilePath = "mvp/Dockerfile"
-
-[deploy]
-startCommand = ""
+buildContextDir = "mvp"
