@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: sses
+      POSTGRES_PASSWORD: sses
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sses"]
+      interval: 3s
+      retries: 20
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://postgres:sses@db:5432/sses
+      SEED_ESTUDIANTES: "3000"
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - keys:/app/keys
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["8080:80"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [api]
+volumes:
+  pgdata:
+  keys:
