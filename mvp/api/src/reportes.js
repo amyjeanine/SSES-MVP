@@ -56,10 +56,13 @@ export async function desempeno({ desde, hasta, estrategia }, entidad_id = null)
     esperadosSeg += semanas; hechosSeg += Math.min(a.seguimientos, semanas);
   }
 
+  // filtroEnt usa alias "e" (JOIN estrategias e); en la subquery interna no hay ese alias,
+  // así que usamos una variante que filtra por estrategia_id subselect
+  const filtroEntSub = entidad_id ? ` AND a2.estrategia_id IN (SELECT id FROM estrategias WHERE entidad_id=$3)` : '';
   const atendidos = (await q(
     `SELECT count(DISTINCT ad.docente_id)::int AS docentes,
             (SELECT count(DISTINCT ee.estudiante_id)::int FROM estrategia_estudiantes ee WHERE ee.estrategia_id IN
-               (SELECT a2.estrategia_id FROM acompanamientos a2 WHERE a2.fecha BETWEEN $1 AND $2${filtroEnt})) AS estudiantes
+               (SELECT a2.estrategia_id FROM acompanamientos a2 WHERE a2.fecha BETWEEN $1 AND $2${filtroEntSub})) AS estudiantes
      FROM acompanamiento_docentes ad JOIN acompanamientos a ON a.id=ad.acompanamiento_id
      JOIN estrategias e ON e.id=a.estrategia_id
      WHERE a.fecha BETWEEN $1 AND $2${filtroEnt}${filtroE}`, p)).rows[0];
