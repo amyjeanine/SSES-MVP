@@ -23,7 +23,7 @@ const MENU: Record<string, [string, string][]> = {
   ENTE_CONTROL: [['control', 'Reportes de control y de ley'], ['percepcion', 'Percepción de tutores']],
   RECTOR: [['reportes', 'Reportes de desempeño'], ['control', 'Reportes de ley']],
 };
-const DEMO = [['admin@sses.gov.co', 'Administrador'], ['coordinador@sses.gov.co', 'Coordinador institucional'], ['lider1@sses.gov.co', 'Tutor líder'], ['docente1@sses.gov.co', 'Tutor docente'], ['control@sses.gov.co', 'Ente de Control'], ['rector@sses.edu.co', 'Rector']];
+const DEMO = [['admin@sses.gov.co', 'Administrador'], ['coordinador@sses.gov.co', 'Coordinador institucional'], ['lider1@sses.gov.co', 'Tutor líder'], ['docente1@sses.gov.co', 'Tutor docente'], ['control@sses.gov.co', 'Ente de Control'], ['rector@sses.gov.co', 'Rector']];
 
 const useHash = () => useSyncExternalStore((f) => { window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, () => location.hash.slice(2) || '');
 const useConexion = () => useSyncExternalStore((f) => conexion.suscribir(f), () => conexion.sin);
