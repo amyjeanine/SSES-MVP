@@ -71,12 +71,12 @@ export async function desempeno({ desde, hasta, estrategia }) {
   };
 }
 
-reportes.get('/desempeno', rol('COORDINADOR_INSTITUCIONAL'), async (req, res) => {
+reportes.get('/desempeno', rol('COORDINADOR_INSTITUCIONAL', 'RECTOR'), async (req, res) => {
   await audit(null, req, 'CONSULTAR', 'reporte_desempeno', null);
   res.json(await desempeno(req.query));
 });
 
-reportes.post('/exportar', rol('COORDINADOR_INSTITUCIONAL'), async (req, res) => {
+reportes.post('/exportar', rol('COORDINADOR_INSTITUCIONAL', 'RECTOR'), async (req, res) => {
   const r = await desempeno(req.body || {});
   const wb = new ExcelJS.Workbook();
   const a = wb.addWorksheet('Acompañamientos por tutor');
@@ -126,7 +126,7 @@ const LEY = {
   },
 };
 
-control.use(rol('ENTE_CONTROL', 'COORDINADOR_INSTITUCIONAL'));
+control.use(rol('ENTE_CONTROL', 'COORDINADOR_INSTITUCIONAL', 'RECTOR'));
 
 control.get('/reportes', async (req, res) => {
   const r = (await q(
