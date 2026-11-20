@@ -14,7 +14,8 @@ CREATE TABLE usuarios (
   clave_hash text NOT NULL,
   rol text NOT NULL CHECK (rol IN ('ADMINISTRADOR','COORDINADOR_INSTITUCIONAL','TUTOR_LIDER','TUTOR_DOCENTE','ENTE_CONTROL','RECTOR')),
   intentos_fallidos int NOT NULL DEFAULT 0,
-  bloqueado_hasta timestamptz
+  bloqueado_hasta timestamptz,
+  entidad_id uuid REFERENCES entidades(id)   -- NULL para ADMINISTRADOR y ENTE_CONTROL
 );
 
 CREATE TABLE estudiantes (

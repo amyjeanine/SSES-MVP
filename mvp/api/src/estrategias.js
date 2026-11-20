@@ -30,6 +30,9 @@ estrategias.get('/', async (req, res) => {
   if (req.user.rol === 'TUTOR_LIDER') {
     params.push(req.user.sub);
     filtro = ' WHERE e.id IN (SELECT estrategia_id FROM estrategia_tutores WHERE usuario_id=$1)';
+  } else if (req.user.rol === 'RECTOR' || req.user.rol === 'COORDINADOR_INSTITUCIONAL') {
+    params.push(req.user.entidad_id);
+    filtro = ' WHERE e.entidad_id=$1';
   }
   const { rows } = await q(`${LISTA}${filtro} ORDER BY e.creado_en DESC`, params);
   res.json(rows);
@@ -38,6 +41,11 @@ estrategias.get('/', async (req, res) => {
 estrategias.get('/:id', async (req, res) => {
   const { rows } = await q(`${LISTA} WHERE e.id=$1`, [req.params.id]);
   if (!rows[0]) throw new HttpError(404, 'La estrategia no existe');
+  // Rector y coordinador solo pueden ver estrategias de su propia entidad
+  const scopedRoles = ['RECTOR', 'COORDINADOR_INSTITUCIONAL'];
+  if (scopedRoles.includes(req.user.rol) && rows[0].entidad_id !== req.user.entidad_id) {
+    throw new HttpError(403, 'No tienes permiso para ver esta estrategia');
+  }
   const docentes = (await q(
     `SELECT d.id, d.documento, d.nombre FROM estrategia_docentes ed JOIN docentes d ON d.id=ed.docente_id
      WHERE ed.estrategia_id=$1 ORDER BY d.nombre`, [req.params.id])).rows;

@@ -101,42 +101,55 @@ reportes.post('/exportar', rol('COORDINADOR_INSTITUCIONAL', 'RECTOR'), async (re
 });
 
 // ---------- RF_006 · reportes de control y de ley (solo lectura) ----------
+// LEY queries accept ($1=periodo, [$2=entidad_id when scoped])
 const LEY = {
   'estrategias-vigentes': {
     columnas: ['Entidad', 'Región', 'Estrategia', 'Inicio', 'Fin', 'Estado', 'Estudiantes'],
-    sql: `SELECT en.nombre, en.region, e.nombre, e.fecha_inicio::text, e.fecha_fin::text, e.estado,
+    sql: (scoped) => `SELECT en.nombre, en.region, e.nombre, e.fecha_inicio::text, e.fecha_fin::text, e.estado,
                  (SELECT count(*) FROM estrategia_estudiantes x WHERE x.estrategia_id=e.id)::int
           FROM estrategias e JOIN entidades en ON en.id=e.entidad_id
-          WHERE e.fecha_inicio <= ($1::date + interval '1 month') AND e.fecha_fin >= $1::date ORDER BY en.nombre, e.nombre`,
+          WHERE e.fecha_inicio <= ($1::date + interval '1 month') AND e.fecha_fin >= $1::date
+          ${scoped ? 'AND e.entidad_id=$2' : ''} ORDER BY en.nombre, e.nombre`,
   },
   'cobertura-docentes': {
     columnas: ['Estrategia', 'Docentes asignados', 'Docentes acompañados en el mes', 'Cobertura (%)'],
-    sql: `SELECT e.nombre,
+    sql: (scoped) => `SELECT e.nombre,
                  (SELECT count(*) FROM estrategia_docentes x WHERE x.estrategia_id=e.id)::int,
                  (SELECT count(*) FROM acompanamiento_docentes ad WHERE ad.estrategia_id=e.id AND ad.mes=$1::date)::int,
                  CASE WHEN (SELECT count(*) FROM estrategia_docentes x WHERE x.estrategia_id=e.id)=0 THEN 0
                       ELSE round(100.0*(SELECT count(*) FROM acompanamiento_docentes ad WHERE ad.estrategia_id=e.id AND ad.mes=$1::date)
                            / (SELECT count(*) FROM estrategia_docentes x WHERE x.estrategia_id=e.id))::int END
-          FROM estrategias e ORDER BY e.nombre`,
+          FROM estrategias e ${scoped ? 'WHERE e.entidad_id=$2' : ''} ORDER BY e.nombre`,
   },
   'participacion-estudiantes': {
     columnas: ['Estrategia', 'Entidad', 'Estudiantes vinculados'],
-    sql: `SELECT e.nombre, en.nombre, (SELECT count(*) FROM estrategia_estudiantes x WHERE x.estrategia_id=e.id)::int
-          FROM estrategias e JOIN entidades en ON en.id=e.entidad_id WHERE $1::date IS NOT NULL ORDER BY e.nombre`,
+    sql: (scoped) => `SELECT e.nombre, en.nombre, (SELECT count(*) FROM estrategia_estudiantes x WHERE x.estrategia_id=e.id)::int
+          FROM estrategias e JOIN entidades en ON en.id=e.entidad_id
+          WHERE $1::date IS NOT NULL ${scoped ? 'AND e.entidad_id=$2' : ''} ORDER BY e.nombre`,
   },
 };
 
 control.use(rol('ENTE_CONTROL', 'COORDINADOR_INSTITUCIONAL', 'RECTOR'));
 
 control.get('/reportes', async (req, res) => {
+  const scopedRoles = ['RECTOR', 'COORDINADOR_INSTITUCIONAL'];
+  const isScoped = scopedRoles.includes(req.user.rol);
+  const eid = req.user.entidad_id;
+  const entFiltro = isScoped ? `AND entidad_id=$1` : '';
+  const entFiltroEst = isScoped
+    ? `AND estrategia_id IN (SELECT id FROM estrategias WHERE entidad_id=$1)`
+    : '';
+  const params = isScoped ? [eid] : [];
+
   const r = (await q(
-    `SELECT (SELECT count(*) FROM estrategias)::int AS estrategias,
-            (SELECT count(*) FROM estrategias WHERE estado='CON_ESTUDIANTES')::int AS con_estudiantes,
-            (SELECT count(DISTINCT estudiante_id) FROM estrategia_estudiantes)::int AS estudiantes_vinculados,
-            (SELECT count(*) FROM acompanamientos)::int AS acompanamientos,
-            (SELECT count(*) FROM seguimientos)::int AS seguimientos,
+    `SELECT (SELECT count(*) FROM estrategias WHERE 1=1 ${entFiltro})::int AS estrategias,
+            (SELECT count(*) FROM estrategias WHERE estado='CON_ESTUDIANTES' ${entFiltro})::int AS con_estudiantes,
+            (SELECT count(DISTINCT estudiante_id) FROM estrategia_estudiantes WHERE 1=1 ${entFiltroEst})::int AS estudiantes_vinculados,
+            (SELECT count(*) FROM acompanamientos WHERE estrategia_id IN (SELECT id FROM estrategias WHERE 1=1 ${entFiltro}))::int AS acompanamientos,
+            (SELECT count(*) FROM seguimientos WHERE acompanamiento_id IN (SELECT id FROM acompanamientos WHERE estrategia_id IN (SELECT id FROM estrategias WHERE 1=1 ${entFiltro})))::int AS seguimientos,
             (SELECT count(*) FROM sesiones_piloto)::int AS sesiones,
-            (SELECT count(*) FROM incidentes WHERE estado='ABIERTO')::int AS incidentes_abiertos`)).rows[0];
+            (SELECT count(*) FROM incidentes WHERE estado='ABIERTO')::int AS incidentes_abiertos`,
+    params)).rows[0];
   const plantillas = (await q('SELECT tipo, version, titulo FROM plantillas_ley WHERE vigente ORDER BY tipo')).rows;
   await audit(null, req, 'CONSULTAR', 'reportes_control', null);
   res.json({ resumen: r, plantillas });
@@ -147,7 +160,10 @@ control.get('/reportes-ley/:tipo', async (req, res) => {
   const pl = (await q('SELECT * FROM plantillas_ley WHERE tipo=$1 AND vigente ORDER BY version DESC LIMIT 1', [req.params.tipo])).rows[0];
   if (!t || !pl) throw new HttpError(404, 'Ese reporte de ley no existe');
   const periodo = /^\d{4}-\d{2}$/.test(String(req.query.periodo)) ? `${req.query.periodo}-01` : new Date().toISOString().slice(0, 7) + '-01';
-  const data = (await q({ text: t.sql, values: [periodo], rowMode: 'array' })).rows;
+  const scopedRoles = ['RECTOR', 'COORDINADOR_INSTITUCIONAL'];
+  const isScoped = scopedRoles.includes(req.user.rol);
+  const values = isScoped ? [periodo, req.user.entidad_id] : [periodo];
+  const data = (await q({ text: t.sql(isScoped), values, rowMode: 'array' })).rows;
   await audit(null, req, req.query.formato === 'xlsx' ? 'DESCARGAR' : 'CONSULTAR', 'reporte_ley', req.params.tipo, { periodo });
   if (req.query.formato === 'xlsx') {
     const wb = new ExcelJS.Workbook();

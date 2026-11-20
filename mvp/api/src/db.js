@@ -30,6 +30,13 @@ pool.connect().then(async (c) => {
       `);
       console.log('[db] Migración aplicada: RECTOR agregado al CHECK de usuarios.rol');
     }
+
+    // Migración idempotente: agrega entidad_id a usuarios si aún no existe
+    await c.query(`
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS entidad_id uuid REFERENCES entidades(id);
+    `);
+
     await c.query('COMMIT');
   } catch (e) {
     await c.query('ROLLBACK');

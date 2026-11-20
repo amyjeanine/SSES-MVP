@@ -27,16 +27,24 @@ async function main() {
   for (const [n, r] of ENT) ents.push((await q('INSERT INTO entidades (nombre, region) VALUES ($1,$2) RETURNING id', [n, r])).rows[0].id);
 
   const hash = await hashClave(CLAVE);
+  // [nombre, correo, rol, índice de entidad (null = global)]
   const U = [
-    ['Marta Lucía Ortega', 'admin@sses.gov.co', 'ADMINISTRADOR'],
-    ['Carlos Andrés Peña', 'coordinador@sses.gov.co', 'COORDINADOR_INSTITUCIONAL'],
-    ['Diana Marcela Ruiz', 'lider1@sses.gov.co', 'TUTOR_LIDER'],
-    ['Jorge Iván Castaño', 'lider2@sses.gov.co', 'TUTOR_LIDER'],
-    ['Luz Adriana Mora', 'docente1@sses.gov.co', 'TUTOR_DOCENTE'],
-    ['Ente de Control Nacional', 'control@sses.gov.co', 'ENTE_CONTROL'],
+    ['Marta Lucía Ortega',       'admin@sses.gov.co',        'ADMINISTRADOR',              null],
+    ['Carlos Andrés Peña',       'coordinador@sses.gov.co',  'COORDINADOR_INSTITUCIONAL',  0],   // ents[0] = Francisco de Paula Santander
+    ['Diana Marcela Ruiz',       'lider1@sses.gov.co',       'TUTOR_LIDER',                0],
+    ['Jorge Iván Castaño',       'lider2@sses.gov.co',       'TUTOR_LIDER',                3],   // ents[3] = Simón Bolívar
+    ['Luz Adriana Mora',         'docente1@sses.gov.co',     'TUTOR_DOCENTE',              0],
+    ['Ente de Control Nacional', 'control@sses.gov.co',      'ENTE_CONTROL',               null],
+    ['Rector Francisco Santander','rector@sses.gov.co',      'RECTOR',                     0],
   ];
   const uid = {};
-  for (const [n, c, r] of U) uid[c] = (await q('INSERT INTO usuarios (nombre, correo, clave_hash, rol) VALUES ($1,$2,$3,$4) RETURNING id', [n, c, hash, r])).rows[0].id;
+  for (const [n, c, r, ei] of U) {
+    const entidadId = ei !== null ? ents[ei] : null;
+    uid[c] = (await q(
+      'INSERT INTO usuarios (nombre, correo, clave_hash, rol, entidad_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [n, c, hash, r, entidadId]
+    )).rows[0].id;
+  }
 
   // Estudiantes: se generan en la base de datos (rápido incluso para millones)
   await q(

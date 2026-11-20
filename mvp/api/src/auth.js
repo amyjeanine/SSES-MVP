@@ -26,7 +26,7 @@ const PUBLIC = fs.readFileSync(pubFile, 'utf8');
 const PRIVATE = fs.readFileSync(privFile, 'utf8');
 
 const firmar = (u, tipo, exp) =>
-  jwt.sign({ sub: u.id, rol: u.rol, nombre: u.nombre, tipo }, PRIVATE, { algorithm: 'RS256', expiresIn: exp });
+  jwt.sign({ sub: u.id, rol: u.rol, nombre: u.nombre, entidad_id: u.entidad_id ?? null, tipo }, PRIVATE, { algorithm: 'RS256', expiresIn: exp });
 
 // Filtro de seguridad: valida el token (RS256) en cada petición
 export function autenticar(req, _res, next) {
@@ -84,7 +84,7 @@ authRouter.post('/refrescar', async (req, res) => {
   try {
     const p = jwt.verify(String(req.body?.refresco || ''), PUBLIC, { algorithms: ['RS256'] });
     if (p.tipo !== 'refresco') throw new Error('tipo');
-    res.json({ acceso: firmar({ id: p.sub, rol: p.rol, nombre: p.nombre }, 'acceso', '15m') });
+    res.json({ acceso: firmar({ id: p.sub, rol: p.rol, nombre: p.nombre, entidad_id: p.entidad_id ?? null }, 'acceso', '15m') });
   } catch {
     throw new HttpError(401, 'Sesión vencida: vuelve a iniciar sesión');
   }
