@@ -10,18 +10,20 @@ import Sesiones from './pages/sesiones';
 import Instrumento from './pages/instrumento';
 import Percepcion from './pages/percepcion';
 import Control from './pages/control';
+import Usuarios from './pages/usuarios';
 
 const NOMBRE_ROL: Record<string, string> = {
-  ADMINISTRADOR: 'Administrador', COORDINADOR_INSTITUCIONAL: 'Coordinador institucional', TUTOR_LIDER: 'Tutor líder', TUTOR_DOCENTE: 'Tutor docente', ENTE_CONTROL: 'Ente de Control',
+  ADMINISTRADOR: 'Administrador', COORDINADOR_INSTITUCIONAL: 'Coordinador institucional', TUTOR_LIDER: 'Tutor líder', TUTOR_DOCENTE: 'Tutor docente', ENTE_CONTROL: 'Ente de Control', RECTOR: 'Rector',
 };
 const MENU: Record<string, [string, string][]> = {
-  ADMINISTRADOR: [['estrategias', 'Estrategias']],
+  ADMINISTRADOR: [['estrategias', 'Estrategias'], ['usuarios', 'Usuarios']],
   COORDINADOR_INSTITUCIONAL: [['reportes', 'Reportes de desempeño'], ['sesiones', 'Sesiones del piloto'], ['percepcion', 'Percepción de tutores'], ['control', 'Reportes de ley']],
   TUTOR_LIDER: [['acompanamientos', 'Acompañamientos'], ['instrumento', 'Instrumento de percepción']],
   TUTOR_DOCENTE: [['instrumento', 'Instrumento de percepción']],
   ENTE_CONTROL: [['control', 'Reportes de control y de ley'], ['percepcion', 'Percepción de tutores']],
+  RECTOR: [['reportes', 'Reportes de desempeño'], ['control', 'Reportes de ley']],
 };
-const DEMO = [['admin@sses.gov.co', 'Administrador'], ['coordinador@sses.gov.co', 'Coordinador institucional'], ['lider1@sses.gov.co', 'Tutor líder'], ['docente1@sses.gov.co', 'Tutor docente'], ['control@sses.gov.co', 'Ente de Control']];
+const DEMO = [['admin@sses.gov.co', 'Administrador'], ['coordinador@sses.gov.co', 'Coordinador institucional'], ['lider1@sses.gov.co', 'Tutor líder'], ['docente1@sses.gov.co', 'Tutor docente'], ['control@sses.gov.co', 'Ente de Control'], ['rector@sses.edu.co', 'Rector']];
 
 const useHash = () => useSyncExternalStore((f) => { window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, () => location.hash.slice(2) || '');
 const useConexion = () => useSyncExternalStore((f) => conexion.suscribir(f), () => conexion.sin);
@@ -78,7 +80,7 @@ export default function App() {
   const actual = menu.find(([k]) => k === ruta)?.[0] || menu[0]?.[0];
   const pagina = {
     estrategias: <Estrategias />, acompanamientos: <Acompanamientos />, reportes: <Reportes />, sesiones: <Sesiones />,
-    instrumento: <Instrumento />, percepcion: <Percepcion />, control: <Control />,
+    instrumento: <Instrumento />, percepcion: <Percepcion />, control: <Control />, usuarios: <Usuarios />,
   }[actual as string];
 
   return (

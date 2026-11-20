@@ -9,6 +9,7 @@ import { estrategias, catalogos } from './estrategias.js';
 import { acomp, sincro } from './acompanamientos.js';
 import { pilotaje, instrumentos } from './pilotaje.js';
 import { reportes, control } from './reportes.js';
+import { usuariosRouter } from './usuarios.js';
 import { q } from './db.js';
 import { HttpError } from './util.js';
 
@@ -40,6 +41,7 @@ app.use('/api/pilotaje', pilotaje);
 app.use('/api/instrumentos', instrumentos);
 app.use('/api/reportes', reportes);
 app.use('/api/control', control);
+app.use('/api/usuarios', usuariosRouter);
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Servicio no encontrado')));
 
 // Si existe la PWA compilada, la sirve (en Docker lo hace NGINX)
