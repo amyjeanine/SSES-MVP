@@ -41,6 +41,45 @@ usuariosRouter.post('/', rol('ADMINISTRADOR'), async (req, res) => {
   res.status(201).json(usuario);
 });
 
+// PATCH /api/usuarios/:id — edita nombre, correo, clave y/o rol (solo ADMINISTRADOR)
+const editarSchema = z.object({
+  nombre:     z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(120).optional(),
+  correo:     z.string().email('Correo no válido').max(120).optional(),
+  clave:      z.string().min(8, 'La clave debe tener al menos 8 caracteres').max(128).optional(),
+  rolUsuario: z.enum(ROLES_VALIDOS, { errorMap: () => ({ message: 'Rol no válido' }) }).optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: 'Debes enviar al menos un campo para actualizar.' });
+
+usuariosRouter.patch('/:id', rol('ADMINISTRADOR'), async (req, res) => {
+  const { id } = req.params;
+  const data = editarSchema.parse(req.body);
+
+  // Verificar que el usuario exista
+  const { rows: existe } = await q('SELECT id FROM usuarios WHERE id=$1', [id]);
+  if (existe.length === 0) throw new HttpError(404, 'Usuario no encontrado.');
+
+  // Si cambia correo, verificar unicidad
+  if (data.correo) {
+    const { rows: dup } = await q('SELECT id FROM usuarios WHERE lower(correo)=lower($1) AND id<>$2', [data.correo, id]);
+    if (dup.length > 0) throw new HttpError(409, 'Ya existe otro usuario con ese correo.');
+  }
+
+  // Construir SET dinámico
+  const sets = [];
+  const vals = [];
+  if (data.nombre)     { sets.push(`nombre=$${sets.length + 1}`);     vals.push(data.nombre); }
+  if (data.correo)     { sets.push(`correo=$${sets.length + 1}`);     vals.push(data.correo); }
+  if (data.clave)      { sets.push(`clave_hash=$${sets.length + 1}`); vals.push(await hashClave(data.clave)); }
+  if (data.rolUsuario) { sets.push(`rol=$${sets.length + 1}`);        vals.push(data.rolUsuario); }
+  vals.push(id);
+
+  const { rows } = await q(
+    `UPDATE usuarios SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id, nombre, correo, rol`,
+    vals
+  );
+  await audit(null, req, 'EDITAR_USUARIO', 'usuarios', id, { campos: Object.keys(data) });
+  res.json(rows[0]);
+});
+
 // DELETE /api/usuarios/:id — elimina un usuario (solo ADMINISTRADOR, no puede eliminarse a sí mismo)
 usuariosRouter.delete('/:id', rol('ADMINISTRADOR'), async (req, res) => {
   const { id } = req.params;
