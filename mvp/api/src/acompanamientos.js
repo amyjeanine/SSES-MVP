@@ -94,21 +94,22 @@ export async function registrarSeguimiento(req, datos) {
 
 acomp.get('/tipos-actividad', (_q, res) => res.json(TIPOS_ACTIVIDAD));
 
-acomp.post('/', rol('TUTOR_LIDER'), async (req, res) => {
+acomp.post('/', rol('TUTOR_LIDER', 'TUTOR_DOCENTE'), async (req, res) => {
   const r = await registrarAcompanamiento(req, req.body);
   res.status(r.existente ? 200 : 201).json(r);
 });
 
-acomp.post('/:id/seguimientos', rol('TUTOR_LIDER'), async (req, res) => {
+acomp.post('/:id/seguimientos', rol('TUTOR_LIDER', 'TUTOR_DOCENTE'), async (req, res) => {
   const r = await registrarSeguimiento(req, { ...req.body, acompanamiento_id: req.params.id });
   res.status(r.existente ? 200 : 201).json(r);
 });
 
 // Historial con filtros por fecha, docente y estrategia
-acomp.get('/', rol('TUTOR_LIDER', 'COORDINADOR_INSTITUCIONAL'), async (req, res) => {
+acomp.get('/', rol('TUTOR_LIDER', 'TUTOR_DOCENTE', 'COORDINADOR_INSTITUCIONAL'), async (req, res) => {
   const { desde, hasta, docente, estrategia } = req.query;
   const p = [], w = [];
   if (req.user.rol === 'TUTOR_LIDER') { p.push(req.user.sub); w.push(`a.estrategia_id IN (SELECT estrategia_id FROM estrategia_tutores WHERE usuario_id=$${p.length})`); }
+  else if (req.user.rol === 'TUTOR_DOCENTE') { p.push(req.user.entidad_id); w.push(`a.estrategia_id IN (SELECT id FROM estrategias WHERE entidad_id=$${p.length})`); }
   if (desde) { p.push(desde); w.push(`a.fecha>=$${p.length}`); }
   if (hasta) { p.push(hasta); w.push(`a.fecha<=$${p.length}`); }
   if (estrategia) { p.push(estrategia); w.push(`a.estrategia_id=$${p.length}`); }
@@ -125,7 +126,7 @@ acomp.get('/', rol('TUTOR_LIDER', 'COORDINADOR_INSTITUCIONAL'), async (req, res)
 });
 
 // Calendario mensual y semanal: marca los días pendientes de registro
-acomp.get('/calendario', rol('TUTOR_LIDER'), async (req, res) => {
+acomp.get('/calendario', rol('TUTOR_LIDER', 'TUTOR_DOCENTE'), async (req, res) => {
   const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : new Date().toISOString().slice(0, 7);
   const ini = `${mes}-01`;
   const { rows } = await q(
@@ -187,7 +188,7 @@ acomp.put('/:id', rol('TUTOR_LIDER', 'COORDINADOR_INSTITUCIONAL'), async (req, r
 });
 
 // RF_004 · sincronización por lotes de hasta 50 registros, en el orden en que se crearon
-sincro.post('/', rol('TUTOR_LIDER'), async (req, res) => {
+sincro.post('/', rol('TUTOR_LIDER', 'TUTOR_DOCENTE'), async (req, res) => {
   const { registros } = z.object({
     registros: z.array(z.object({ clave: z.string(), tipo: z.enum(['ACOMPANAMIENTO', 'SEGUIMIENTO']), datos: z.any() })).max(50),
   }).parse(req.body);

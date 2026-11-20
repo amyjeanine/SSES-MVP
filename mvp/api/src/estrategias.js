@@ -182,7 +182,7 @@ catalogos.get('/estudiantes/conteo', rol('ADMINISTRADOR'), async (req, res) => {
   res.json({ n: r.rows[0].n });
 });
 
-catalogos.get('/docentes', rol('ADMINISTRADOR', 'TUTOR_LIDER', 'COORDINADOR_INSTITUCIONAL'), async (req, res) => {
+catalogos.get('/docentes', rol('ADMINISTRADOR', 'TUTOR_LIDER', 'TUTOR_DOCENTE', 'COORDINADOR_INSTITUCIONAL'), async (req, res) => {
   const { entidad = '' } = req.query;
   const { rows } = await q(
     `SELECT d.id, d.documento, d.nombre, d.entidad_id, en.nombre AS entidad FROM docentes d JOIN entidades en ON en.id=d.entidad_id
@@ -195,13 +195,26 @@ catalogos.get('/tutores-lider', rol('ADMINISTRADOR'), async (_req, res) => {
 });
 
 // Datos de trabajo del tutor líder para guardar en el dispositivo (solo lo asignado)
-catalogos.get('/mis-datos', rol('TUTOR_LIDER'), async (req, res) => {
-  const est = (await q(
-    `SELECT e.id, e.nombre, e.fecha_inicio, e.fecha_fin FROM estrategias e
-     JOIN estrategia_tutores t ON t.estrategia_id=e.id WHERE t.usuario_id=$1 ORDER BY e.nombre`, [req.user.sub])).rows;
-  const doc = (await q(
-    `SELECT ed.estrategia_id, d.id, d.documento, d.nombre FROM estrategia_docentes ed
-     JOIN docentes d ON d.id=ed.docente_id JOIN estrategia_tutores t ON t.estrategia_id=ed.estrategia_id
-     WHERE t.usuario_id=$1 ORDER BY d.nombre`, [req.user.sub])).rows;
+catalogos.get('/mis-datos', rol('TUTOR_LIDER', 'TUTOR_DOCENTE'), async (req, res) => {
+  let est, doc;
+  if (req.user.rol === 'TUTOR_LIDER') {
+    est = (await q(
+      `SELECT e.id, e.nombre, e.fecha_inicio, e.fecha_fin FROM estrategias e
+       JOIN estrategia_tutores t ON t.estrategia_id=e.id WHERE t.usuario_id=$1 ORDER BY e.nombre`, [req.user.sub])).rows;
+    doc = (await q(
+      `SELECT ed.estrategia_id, d.id, d.documento, d.nombre FROM estrategia_docentes ed
+       JOIN docentes d ON d.id=ed.docente_id JOIN estrategia_tutores t ON t.estrategia_id=ed.estrategia_id
+       WHERE t.usuario_id=$1 ORDER BY d.nombre`, [req.user.sub])).rows;
+  } else {
+    // TUTOR_DOCENTE: estrategias de su entidad
+    est = (await q(
+      `SELECT id, nombre, fecha_inicio, fecha_fin FROM estrategias
+       WHERE entidad_id=$1 ORDER BY nombre`, [req.user.entidad_id])).rows;
+    doc = (await q(
+      `SELECT ed.estrategia_id, d.id, d.documento, d.nombre FROM estrategia_docentes ed
+       JOIN docentes d ON d.id=ed.docente_id
+       JOIN estrategias e ON e.id=ed.estrategia_id
+       WHERE e.entidad_id=$1 ORDER BY d.nombre`, [req.user.entidad_id])).rows;
+  }
   res.json({ estrategias: est, docentes: doc, descargado_en: new Date().toISOString() });
 });

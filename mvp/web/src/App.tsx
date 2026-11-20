@@ -19,7 +19,7 @@ const MENU: Record<string, [string, string][]> = {
   ADMINISTRADOR: [['estrategias', 'Estrategias'], ['usuarios', 'Usuarios']],
   COORDINADOR_INSTITUCIONAL: [['reportes', 'Reportes de desempeño'], ['sesiones', 'Sesiones del piloto'], ['percepcion', 'Percepción de tutores'], ['control', 'Reportes de ley']],
   TUTOR_LIDER: [['acompanamientos', 'Acompañamientos'], ['instrumento', 'Instrumento de percepción']],
-  TUTOR_DOCENTE: [['instrumento', 'Instrumento de percepción']],
+  TUTOR_DOCENTE: [['acompanamientos', 'Acompañamientos'], ['instrumento', 'Instrumento de percepción']],
   ENTE_CONTROL: [['control', 'Reportes de control y de ley'], ['percepcion', 'Percepción de tutores']],
   RECTOR: [['reportes', 'Reportes de desempeño'], ['control', 'Reportes de ley']],
 };
@@ -90,7 +90,7 @@ export default function App() {
         <nav className="menu">{menu.map(([k, t]) => <a key={k} href={`#/${k}`} className={k === actual ? 'act' : ''}>{t}</a>)}</nav>
         <div className="estado">
           <span className={`pill ${sinConexion ? 'off' : 'on'}`}>{sinConexion ? '● Sin conexión' : '● En línea'}</span>
-          {usuario.rol === 'TUTOR_LIDER' && <>
+          {(usuario.rol === 'TUTOR_LIDER' || usuario.rol === 'TUTOR_DOCENTE') && <>
             <span className="pill gris">{pendientes} por sincronizar</span>
             <button className="btn sec peq" style={{ background: 'transparent', color: '#fff', borderColor: '#9fc2d8' }} disabled={sinConexion || sync.sincronizando} onClick={() => sincronizar()}>{sync.sincronizando ? 'Sincronizando…' : 'Sincronizar ahora'}</button>
           </>}
