@@ -126,9 +126,10 @@ reportes.post('/exportar', rol('COORDINADOR_INSTITUCIONAL', 'RECTOR'), async (re
 // LEY queries accept ($1=periodo, [$2=entidad_id when scoped])
 const LEY = {
   'estrategias-vigentes': {
-    columnas: ['Entidad', 'Región', 'Estrategia', 'Inicio', 'Fin', 'Estado', 'Estudiantes'],
+    columnas: ['Entidad', 'Región', 'Estrategia', 'Inicio', 'Fin', 'Estado', 'Estudiantes en estrategia', 'Total estudiantes institución'],
     sql: (scoped) => `SELECT en.nombre, en.region, e.nombre, e.fecha_inicio::text, e.fecha_fin::text, e.estado,
-                 (SELECT count(*) FROM estrategia_estudiantes x WHERE x.estrategia_id=e.id)::int
+                 (SELECT count(*) FROM estrategia_estudiantes x WHERE x.estrategia_id=e.id)::int,
+                 (SELECT count(*) FROM estudiantes es WHERE es.entidad_id=en.id)::int
           FROM estrategias e JOIN entidades en ON en.id=e.entidad_id
           WHERE e.fecha_inicio <= ($1::date + interval '1 month') AND e.fecha_fin >= $1::date
           ${scoped ? 'AND e.entidad_id=$2' : ''} ORDER BY en.nombre, e.nombre`,
