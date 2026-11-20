@@ -189,14 +189,84 @@ function Historial({ datos }: { datos: any }) {
   };
   useEffect(() => { buscar(); }, []); // eslint-disable-line
   const pdf = () => {
-    const doc = new jsPDF(); let y = 16;
-    doc.setFontSize(14); doc.text('Historial de acompañamientos y seguimientos', 14, y); y += 8;
-    doc.setFontSize(9); doc.text(`Tutor líder: ${sesion.usuario()?.nombre}   ·   Generado: ${new Date().toLocaleString('es-CO')}`, 14, y); y += 8;
-    for (const a of rows || []) {
-      const lineas = doc.splitTextToSize(`${fmtFecha(a.fecha)} · ${a.tipo} · ${a.estrategia}\nDocentes: ${a.docentes}\nActividad: ${a.tipo_actividad} (${a.duracion_min} min)\nObservaciones: ${a.observaciones}\nCompromisos: ${a.compromisos}\nSeguimientos: ${a.seguimientos.length}`, 180);
-      if (y + lineas.length * 4.5 > 282) { doc.addPage(); y = 16; }
-      doc.text(lineas, 14, y); y += lineas.length * 4.5 + 4;
-    }
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const PW = 277; // A4 landscape: 297 - 2*10 márgenes
+    const ML = 10;
+    const PAGE_H = 210;
+    const FOOTER = 10;
+
+    // Cabecera del documento
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+    doc.text('Historial de acompañamientos y seguimientos', ML, 12);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text(`Tutor líder: ${sesion.usuario()?.nombre ?? ''}   ·   Generado: ${new Date().toLocaleString('es-CO')}`, ML, 18);
+
+    // Columnas [etiqueta, ancho en mm]
+    const cols: [string, number][] = [
+      ['Fecha', 22], ['Tipo', 20], ['Estrategia', 38], ['Docentes', 38],
+      ['Actividad', 30], ['Dur.', 14], ['Observaciones', 45], ['Compromisos', 45], ['Seguim.', 25],
+    ];
+    const totalW = cols.reduce((s, [, w]) => s + w, 0);
+    const scale = PW / totalW;
+    const colW = cols.map(([, w]) => w * scale);
+    const colX: number[] = [];
+    colW.reduce((acc, w) => { colX.push(acc); return acc + w; }, ML);
+
+    const ROW_PAD = 1.5;
+    const FONT_SZ = 7;
+    const LINE_H = FONT_SZ * 0.3528 + 0.6;
+    let y = 24;
+
+    const drawHeader = () => {
+      doc.setFillColor(30, 80, 160); doc.setTextColor(255, 255, 255);
+      doc.setFontSize(FONT_SZ); doc.setFont('helvetica', 'bold');
+      const hh = LINE_H + ROW_PAD * 2;
+      doc.rect(ML, y, PW, hh, 'F');
+      cols.forEach(([label], i) => {
+        doc.text(label, colX[i] + 1, y + ROW_PAD + LINE_H - 0.5, { maxWidth: colW[i] - 2 });
+      });
+      y += hh;
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+    };
+
+    drawHeader();
+
+    (rows || []).forEach((a, ri) => {
+      const cells = [
+        fmtFecha(a.fecha),
+        a.tipo ?? '',
+        a.estrategia ?? '',
+        a.docentes ?? '',
+        a.tipo_actividad ?? '',
+        `${a.duracion_min ?? ''} min`,
+        a.observaciones ?? '—',
+        a.compromisos ?? '—',
+        a.seguimientos?.length
+          ? a.seguimientos.map((s: any) => `${fmtFecha(s.fecha)}: ${s.observacion}`).join(' | ')
+          : '—',
+      ];
+
+      doc.setFontSize(FONT_SZ);
+      const wrapped = cells.map((txt, i) => doc.splitTextToSize(String(txt), colW[i] - 2));
+      const maxLines = Math.max(...wrapped.map(l => l.length));
+      const rh = maxLines * LINE_H + ROW_PAD * 2;
+
+      if (y + rh > PAGE_H - FOOTER) { doc.addPage(); y = 10; drawHeader(); }
+
+      if (ri % 2 === 0) { doc.setFillColor(240, 245, 255); doc.rect(ML, y, PW, rh, 'F'); }
+      doc.setDrawColor(200, 210, 230);
+      doc.line(ML, y + rh, ML + PW, y + rh);
+
+      doc.setFontSize(FONT_SZ); doc.setFont('helvetica', 'normal');
+      wrapped.forEach((lines, i) => {
+        doc.text(lines, colX[i] + 1, y + ROW_PAD + LINE_H - 0.5, { maxWidth: colW[i] - 2 });
+      });
+      y += rh;
+    });
+
+    doc.setDrawColor(30, 80, 160);
+    doc.rect(ML, 24, PW, Math.max(y - 24, 1));
+
     doc.save('historial_acompanamientos.pdf');
   };
   const docentes = Array.from(new Map(datos.docentes.map((d: any) => [d.id, d])).values()) as any[];
