@@ -15,7 +15,8 @@ const ENT = [
   ['I.E. Etnoeducativa Amazónica', 'Amazonía'], ['I.E. Cristo Rey', 'Amazonía'],
 ];
 
-async function main() {
+// Exportada para auto-seed desde db.js (no cierra el pool)
+export async function seed() {
   await q('TRUNCATE auditoria, incidentes, respuestas_instrumento, sesiones_piloto, instrumento_preguntas, instrumentos, seguimientos, acompanamiento_docentes, acompanamientos, estrategia_tutores, estrategia_docentes, estrategia_estudiantes, estrategias, docentes, estudiantes, usuarios, entidades RESTART IDENTITY CASCADE').catch(async () => {
     // la bitácora es inmutable: se recrea el trigger solo para el reinicio de datos de ejemplo
     await q('ALTER TABLE auditoria DISABLE TRIGGER trg_auditoria_inmutable');
@@ -131,6 +132,9 @@ async function main() {
 
   const c = (await q('SELECT (SELECT count(*) FROM estudiantes) e, (SELECT count(*) FROM docentes) d')).rows[0];
   console.log(`Datos de ejemplo listos: ${c.e} estudiantes, ${c.d} docentes. Clave de todos los usuarios: ${CLAVE}`);
-  await pool.end();
 }
-main().catch((e) => { console.error(e); process.exit(1); });
+
+// Punto de entrada cuando se ejecuta directamente: node src/seed.js
+if (process.argv[1]?.endsWith('seed.js')) {
+  seed().then(() => pool.end()).catch((e) => { console.error(e); process.exit(1); });
+}

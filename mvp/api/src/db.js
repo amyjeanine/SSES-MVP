@@ -45,6 +45,7 @@ pool.connect().then(async (c) => {
     c.release();
   }
 }).catch((e) => console.error('[db] No se pudo conectar para migración:', e.message));
+
 export const q = (text, params) => pool.query(text, params);
 
 export async function tx(fn) {

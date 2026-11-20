@@ -11,6 +11,7 @@ import { pilotaje, instrumentos } from './pilotaje.js';
 import { reportes, control } from './reportes.js';
 import { usuariosRouter } from './usuarios.js';
 import { q } from './db.js';
+import { seed } from './seed.js';
 import { HttpError } from './util.js';
 
 export const app = express();
@@ -63,5 +64,18 @@ app.use((err, _req, res, _next) => {
 
 if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
   const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`SSES API escuchando en http://localhost:${port}`));
+  app.listen(port, () => {
+    console.log(`SSES API escuchando en http://localhost:${port}`);
+
+    // Auto-seed: si la BD está vacía al arrancar, carga todos los usuarios demo
+    q('SELECT COUNT(*)::int AS n FROM usuarios')
+      .then(async ({ rows }) => {
+        if (rows[0].n === 0) {
+          console.log('[server] Base de datos vacía — ejecutando seed automático...');
+          await seed();
+          console.log('[server] Seed automático completado. Usuarios demo listos.');
+        }
+      })
+      .catch(() => { /* tabla aún no existe en primer arranque muy temprano — se ignorar */ });
+  });
 }
