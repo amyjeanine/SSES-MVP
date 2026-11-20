@@ -9,12 +9,16 @@ export const reportes = Router();
 export const control = Router();
 
 // ---------- RF_005 · reportes de desempeño ----------
-export async function desempeno({ desde, hasta, estrategia }) {
+// entidad_id: uuid | null — cuando es uuid, filtra solo la institución del RECTOR/COORDINADOR
+export async function desempeno({ desde, hasta, estrategia }, entidad_id = null) {
   const hoy = new Date().toISOString().slice(0, 10);
   desde = desde || new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
   hasta = hasta || hoy;
   const p = [desde, hasta];
   let filtroE = '';
+  let filtroEnt = '';
+  // Scoping por entidad (RECTOR / COORDINADOR_INSTITUCIONAL ven solo su institución)
+  if (entidad_id) { p.push(entidad_id); filtroEnt = ` AND e.entidad_id=$${p.length}`; }
   if (estrategia) { p.push(estrategia); filtroE = ` AND a.estrategia_id=$${p.length}`; }
 
   const acomp = (await q(
@@ -22,16 +26,20 @@ export async function desempeno({ desde, hasta, estrategia }) {
             to_char(a.fecha,'YYYY-MM') AS mes,
             (SELECT count(*)::int FROM seguimientos s WHERE s.acompanamiento_id=a.id) AS seguimientos
      FROM acompanamientos a JOIN usuarios u ON u.id=a.creado_por JOIN estrategias e ON e.id=a.estrategia_id
-     WHERE a.fecha BETWEEN $1 AND $2${filtroE}`, p)).rows;
+     WHERE a.fecha BETWEEN $1 AND $2${filtroEnt}${filtroE}`, p)).rows;
 
   // Esperados: un acompañamiento por docente asignado a cada estrategia del tutor, por mes del periodo
   const meses = [];
   const d = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`);
   while (d.toISOString().slice(0, 10) <= hasta) { meses.push(d.toISOString().slice(0, 7)); d.setUTCMonth(d.getUTCMonth() + 1); }
+  const asigParams = [];
+  let asigWhere = '';
+  if (entidad_id) { asigParams.push(entidad_id); asigWhere += ` AND t.estrategia_id IN (SELECT id FROM estrategias WHERE entidad_id=$${asigParams.length})`; }
+  if (estrategia) { asigParams.push(estrategia); asigWhere += ` AND t.estrategia_id=$${asigParams.length}`; }
   const asig = (await q(
     `SELECT t.usuario_id, u.nombre AS tutor, count(ed.docente_id)::int AS docentes FROM estrategia_tutores t
      JOIN usuarios u ON u.id=t.usuario_id JOIN estrategia_docentes ed ON ed.estrategia_id=t.estrategia_id
-     ${estrategia ? 'WHERE t.estrategia_id=$1' : ''} GROUP BY t.usuario_id, u.nombre`, estrategia ? [estrategia] : [])).rows;
+     WHERE 1=1${asigWhere} GROUP BY t.usuario_id, u.nombre`, asigParams)).rows;
   const porTutorMes = asig.map((t) => ({
     tutor: t.tutor,
     meses: meses.map((m) => ({ mes: m, realizados: acomp.filter((a) => a.creado_por === t.usuario_id && a.mes === m).length, esperados: t.docentes })),
@@ -51,15 +59,22 @@ export async function desempeno({ desde, hasta, estrategia }) {
   const atendidos = (await q(
     `SELECT count(DISTINCT ad.docente_id)::int AS docentes,
             (SELECT count(DISTINCT ee.estudiante_id)::int FROM estrategia_estudiantes ee WHERE ee.estrategia_id IN
-               (SELECT a2.estrategia_id FROM acompanamientos a2 WHERE a2.fecha BETWEEN $1 AND $2)) AS estudiantes
+               (SELECT a2.estrategia_id FROM acompanamientos a2 WHERE a2.fecha BETWEEN $1 AND $2${filtroEnt})) AS estudiantes
      FROM acompanamiento_docentes ad JOIN acompanamientos a ON a.id=ad.acompanamiento_id
-     WHERE a.fecha BETWEEN $1 AND $2${filtroE}`, p)).rows[0];
+     JOIN estrategias e ON e.id=a.estrategia_id
+     WHERE a.fecha BETWEEN $1 AND $2${filtroEnt}${filtroE}`, p)).rows[0];
 
+  const entFiltroEstr = entidad_id ? ` AND e.entidad_id=$3` : '';
   const porEstrategia = (await q(
     `SELECT e.nombre AS estrategia, count(DISTINCT a.id)::int AS acompanamientos, count(s.id)::int AS seguimientos
      FROM estrategias e LEFT JOIN acompanamientos a ON a.estrategia_id=e.id AND a.fecha BETWEEN $1 AND $2
      LEFT JOIN seguimientos s ON s.acompanamiento_id=a.id
-     ${estrategia ? 'WHERE e.id=$3' : ''} GROUP BY e.nombre ORDER BY e.nombre`, estrategia ? [desde, hasta, estrategia] : [desde, hasta])).rows;
+     ${estrategia ? `WHERE e.id=$${entidad_id ? '4' : '3'}` : (entidad_id ? 'WHERE e.entidad_id=$3' : '')}
+     GROUP BY e.nombre ORDER BY e.nombre`,
+    estrategia && entidad_id ? [desde, hasta, entidad_id, estrategia]
+      : estrategia ? [desde, hasta, estrategia]
+      : entidad_id ? [desde, hasta, entidad_id]
+      : [desde, hasta])).rows;
 
   return {
     periodo: { desde, hasta },
@@ -71,13 +86,17 @@ export async function desempeno({ desde, hasta, estrategia }) {
   };
 }
 
+const scopedRoles = ['RECTOR', 'COORDINADOR_INSTITUCIONAL'];
+
 reportes.get('/desempeno', rol('COORDINADOR_INSTITUCIONAL', 'RECTOR'), async (req, res) => {
+  const entidad_id = scopedRoles.includes(req.user.rol) ? req.user.entidad_id : null;
   await audit(null, req, 'CONSULTAR', 'reporte_desempeno', null);
-  res.json(await desempeno(req.query));
+  res.json(await desempeno(req.query, entidad_id));
 });
 
 reportes.post('/exportar', rol('COORDINADOR_INSTITUCIONAL', 'RECTOR'), async (req, res) => {
-  const r = await desempeno(req.body || {});
+  const entidad_id = scopedRoles.includes(req.user.rol) ? req.user.entidad_id : null;
+  const r = await desempeno(req.body || {}, entidad_id);
   const wb = new ExcelJS.Workbook();
   const a = wb.addWorksheet('Acompañamientos por tutor');
   a.columns = [{ header: 'Tutor líder', width: 30 }, { header: 'Mes', width: 12 }, { header: 'Realizados', width: 14 }, { header: 'Esperados', width: 14 }];
